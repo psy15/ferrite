@@ -20,9 +20,19 @@ pub fn decode(input: &[u8]) -> BencodeValue {
             let n = string.parse::<i64>().unwrap();
             BencodeValue::Integer(n)
         }
+
+        b'0'..=b'9' => {
+            let colon = input.iter().position(|&b| b == b':').unwrap();
+            let length: usize = std::str::from_utf8(&input[0..colon])
+                .unwrap()
+                .parse()
+                .unwrap();
+            let bytes = &input[colon + 1..colon + 1 + length];
+            BencodeValue::Bytes(bytes.to_vec())
+        }
+
         _ => todo!(), // b'l'        => // parse list
                       // b'd'        => // parse dict
-                      // b'0'..=b'9' => // parse string
                       // _           => // error, unexpected byte
     }
 }
@@ -52,5 +62,31 @@ mod tests {
     fn test_zero() {
         let result = decode(b"i0e");
         assert_eq!(result, BencodeValue::Integer(0));
+    }
+
+    #[test]
+    fn test_string_simple() {
+        let result = decode(b"4:spam");
+        assert_eq!(result, BencodeValue::Bytes(b"spam".to_vec()));
+    }
+
+    #[test]
+    fn test_string_empty() {
+        let result = decode(b"0:");
+        assert_eq!(result, BencodeValue::Bytes(vec![]));
+    }
+
+    #[test]
+    fn test_string_long_length() {
+        let result = decode(b"10:helloworld");
+        assert_eq!(result, BencodeValue::Bytes(b"helloworld".to_vec()));
+    }
+
+    #[test]
+    fn test_string_binary() {
+        // raw bytes that aren't valid UTF-8
+        let input = b"3:\xFF\xFE\xFD";
+        let result = decode(input);
+        assert_eq!(result, BencodeValue::Bytes(vec![0xFF, 0xFE, 0xFD]));
     }
 }
