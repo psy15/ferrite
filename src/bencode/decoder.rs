@@ -53,9 +53,32 @@ pub fn parse(input: &[u8]) -> (BencodeValue, usize) {
 
             (BencodeValue::List(items), pos + 1)
         }
-        _ => todo!(), // b'l'        => // parse list
-                      // b'd'        => // parse dict
-                      // _           => // error, unexpected byte
+
+        // d3:cow3:moo3:pigsi42ee
+        b'd' => {
+            let mut dict = vec![];
+            let mut pos = 1;
+
+            loop {
+                if input[pos] == b'e' {
+                    break;
+                }
+                let (key, key_consumed) = parse(&input[pos..]);
+                pos += key_consumed; // advance past the key first
+                let (value, val_consumed) = parse(&input[pos..]);
+                pos += val_consumed; // then advance past the value
+
+                if let BencodeValue::Bytes(k) = key {
+                    dict.push((k, value));
+                }
+            }
+
+            (BencodeValue::Dict(dict), pos + 1)
+        }
+
+        _ => todo!(),
+        // b'd'        => // parse dict
+        // _           => // error, unexpected byte
     }
 }
 
@@ -158,5 +181,85 @@ mod tests {
                 BencodeValue::Bytes(b"spam".to_vec()),
             ])
         );
+    }
+
+    #[test]
+    fn test_dict_empty() {
+        let result = decode(b"de");
+        assert_eq!(result, BencodeValue::Dict(vec![]));
+    }
+
+    #[test]
+    fn test_dict_single_pair() {
+        let result = decode(b"d3:cow3:mooe");
+        assert_eq!(
+            result,
+            BencodeValue::Dict(vec![(
+                b"cow".to_vec(),
+                BencodeValue::Bytes(b"moo".to_vec())
+            ),])
+        );
+    }
+
+    #[test]
+    fn test_dict_multiple_pairs() {
+        let result = decode(b"d3:cow3:moo4:spami42ee");
+        assert_eq!(
+            result,
+            BencodeValue::Dict(vec![
+                (b"cow".to_vec(), BencodeValue::Bytes(b"moo".to_vec())),
+                (b"spam".to_vec(), BencodeValue::Integer(42)),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_dict_nested() {
+        let result = decode(b"d4:infod4:name3:fooee");
+        assert_eq!(
+            result,
+            BencodeValue::Dict(vec![(
+                b"info".to_vec(),
+                BencodeValue::Dict(vec![(
+                    b"name".to_vec(),
+                    BencodeValue::Bytes(b"foo".to_vec())
+                ),])
+            ),])
+        );
+    }
+
+    #[test]
+    fn test_dict_value_is_list() {
+        let result = decode(b"d4:listli1ei2eee");
+        assert_eq!(
+            result,
+            BencodeValue::Dict(vec![(
+                b"list".to_vec(),
+                BencodeValue::List(vec![BencodeValue::Integer(1), BencodeValue::Integer(2),])
+            ),])
+        );
+    }
+
+    #[test]
+    fn test_real_torrent_readable() {
+        let bytes = std::fs::read("tests/fixtures/ubuntu.torrent").unwrap();
+        let result = decode(&bytes);
+
+        if let BencodeValue::Dict(pairs) = result {
+            for (key, value) in &pairs {
+                let key_str = std::str::from_utf8(key).unwrap_or("???");
+                match value {
+                    BencodeValue::Bytes(b) => {
+                        if let Ok(s) = std::str::from_utf8(b) {
+                            println!("{}: {}", key_str, s);
+                        } else {
+                            println!("{}: <{} raw bytes>", key_str, b.len());
+                        }
+                    }
+                    BencodeValue::Integer(n) => println!("{}: {}", key_str, n),
+                    _ => println!("{}: <complex type>", key_str),
+                }
+            }
+        }
     }
 }
