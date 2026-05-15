@@ -11,6 +11,11 @@ pub enum BencodeValue {
 //So Vec<u8> is how Rust represents raw binary data, which is exactly what bencode strings are.
 
 pub fn decode(input: &[u8]) -> BencodeValue {
+    let (value, _) = parse(input);
+    value
+}
+
+pub fn parse(input: &[u8]) -> (BencodeValue, usize) {
     // read bytes, return one of the 4 variants
     match input[0] {
         b'i' => {
@@ -18,7 +23,7 @@ pub fn decode(input: &[u8]) -> BencodeValue {
             let bytes = &input[1..end];
             let string = std::str::from_utf8(bytes).unwrap();
             let n = string.parse::<i64>().unwrap();
-            BencodeValue::Integer(n)
+            (BencodeValue::Integer(n), end + 1)
         }
 
         b'0'..=b'9' => {
@@ -28,9 +33,26 @@ pub fn decode(input: &[u8]) -> BencodeValue {
                 .parse()
                 .unwrap();
             let bytes = &input[colon + 1..colon + 1 + length];
-            BencodeValue::Bytes(bytes.to_vec())
+            (BencodeValue::Bytes(bytes.to_vec()), colon + 1 + length)
         }
 
+        // [l] [i] [4] [2] [e] [4] [:] [s] [p] [a] [m] [e]
+        //  0   1   2   3   4   5   6   7   8   9  10  11
+        b'l' => {
+            let mut items = vec![];
+            let mut pos = 1;
+
+            loop {
+                if input[pos] == b'e' {
+                    break;
+                }
+                let (value, consumed) = parse(&input[pos..]);
+                items.push(value);
+                pos += consumed;
+            }
+
+            (BencodeValue::List(items), pos + 1)
+        }
         _ => todo!(), // b'l'        => // parse list
                       // b'd'        => // parse dict
                       // _           => // error, unexpected byte
@@ -88,5 +110,53 @@ mod tests {
         let input = b"3:\xFF\xFE\xFD";
         let result = decode(input);
         assert_eq!(result, BencodeValue::Bytes(vec![0xFF, 0xFE, 0xFD]));
+    }
+
+    #[test]
+    fn test_list_empty() {
+        let result = decode(b"le");
+        assert_eq!(result, BencodeValue::List(vec![]));
+    }
+
+    #[test]
+    fn test_list_of_integers() {
+        let result = decode(b"li42ei-3ee");
+        assert_eq!(
+            result,
+            BencodeValue::List(vec![BencodeValue::Integer(42), BencodeValue::Integer(-3),])
+        );
+    }
+
+    #[test]
+    fn test_list_of_strings() {
+        let result = decode(b"l4:spam3:cowe");
+        assert_eq!(
+            result,
+            BencodeValue::List(vec![
+                BencodeValue::Bytes(b"spam".to_vec()),
+                BencodeValue::Bytes(b"cow".to_vec()),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_list_nested() {
+        let result = decode(b"lli42eee");
+        assert_eq!(
+            result,
+            BencodeValue::List(vec![BencodeValue::List(vec![BencodeValue::Integer(42),]),])
+        );
+    }
+
+    #[test]
+    fn test_list_mixed() {
+        let result = decode(b"li42e4:spame");
+        assert_eq!(
+            result,
+            BencodeValue::List(vec![
+                BencodeValue::Integer(42),
+                BencodeValue::Bytes(b"spam".to_vec()),
+            ])
+        );
     }
 }
