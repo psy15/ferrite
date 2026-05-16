@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum BencodeValue {
     Integer(i64),
     Bytes(Vec<u8>),
@@ -6,34 +6,33 @@ pub enum BencodeValue {
     Dict(Vec<(Vec<u8>, BencodeValue)>), // ordered, not HashMap
 }
 
-//Vec<u8> is just a growable list of bytes.
-//u8 means unsigned 8-bit integer — exactly one byte, values 0–255.
-//So Vec<u8> is how Rust represents raw binary data, which is exactly what bencode strings are.
-
 pub fn decode(input: &[u8]) -> BencodeValue {
     let (value, _) = parse(input);
     value
 }
 
-pub fn parse(input: &[u8]) -> (BencodeValue, usize) {
+fn parse(input: &[u8]) -> (BencodeValue, usize) {
     // read bytes, return one of the 4 variants
     match input[0] {
         b'i' => {
-            let end = input.iter().position(|&b| b == b'e').unwrap();
-            let bytes = &input[1..end];
-            let string = std::str::from_utf8(bytes).unwrap();
-            let n = string.parse::<i64>().unwrap();
-            (BencodeValue::Integer(n), end + 1)
+            let end_pos = input.iter().position(|&byte| byte == b'e').unwrap();
+            let digit_bytes = &input[1..end_pos];
+            let digit_str = std::str::from_utf8(digit_bytes).unwrap();
+            let integer = digit_str.parse::<i64>().unwrap();
+            (BencodeValue::Integer(integer), end_pos + 1)
         }
 
         b'0'..=b'9' => {
-            let colon = input.iter().position(|&b| b == b':').unwrap();
-            let length: usize = std::str::from_utf8(&input[0..colon])
+            let colon_pos = input.iter().position(|&byte| byte == b':').unwrap();
+            let length: usize = std::str::from_utf8(&input[0..colon_pos])
                 .unwrap()
                 .parse()
                 .unwrap();
-            let bytes = &input[colon + 1..colon + 1 + length];
-            (BencodeValue::Bytes(bytes.to_vec()), colon + 1 + length)
+            let content = &input[colon_pos + 1..colon_pos + 1 + length];
+            (
+                BencodeValue::Bytes(content.to_vec()),
+                colon_pos + 1 + length,
+            )
         }
 
         // [l] [i] [4] [2] [e] [4] [:] [s] [p] [a] [m] [e]
@@ -77,14 +76,8 @@ pub fn parse(input: &[u8]) -> (BencodeValue, usize) {
         }
 
         _ => todo!(),
-        // b'd'        => // parse dict
-        // _           => // error, unexpected byte
     }
 }
-
-// important:
-// BencodeValue::Integer(n) → returns it
-// BencodeValue::Integer(n); → throws it away
 
 #[cfg(test)]
 mod tests {
