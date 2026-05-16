@@ -241,25 +241,9 @@ mod tests {
     }
 
     #[test]
-    fn test_real_torrent_readable() {
+    fn test_real_torrent() {
         let bytes = std::fs::read("tests/fixtures/ubuntu.torrent").unwrap();
         let result = decode(&bytes);
-
-        if let BencodeValue::Dict(pairs) = result {
-            for (key, value) in &pairs {
-                let key_str = std::str::from_utf8(key).unwrap_or("???");
-                match value {
-                    BencodeValue::Bytes(b) => {
-                        if let Ok(s) = std::str::from_utf8(b) {
-                            println!("{}: {}", key_str, s);
-                        } else {
-                            println!("{}: <{} raw bytes>", key_str, b.len());
-                        }
-                    }
-                    BencodeValue::Integer(n) => println!("{}: {}", key_str, n),
-                    _ => println!("{}: <complex type>", key_str),
-                }
-            }
-        }
+        assert!(matches!(result, BencodeValue::Dict(_)));
     }
 }
