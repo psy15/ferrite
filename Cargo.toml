@@ -9,5 +9,6 @@ path = "src/lib.rs"
 
 [dependencies]
 thiserror = "1"
+sha1 = "0.10"
 
 [dev-dependencies]
