@@ -14,7 +14,7 @@ fn url_encode(bytes: &[u8]) -> String {
 }
 
 fn parse_peers(response: &[u8]) -> Vec<Peer> {
-    let decoded = decode(response);
+    let decoded = decode(response).unwrap();
     let mut peers = vec![];
 
     if let BencodeValue::Dict(pairs) = decoded {

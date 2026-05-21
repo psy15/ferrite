@@ -155,7 +155,7 @@ mod tests {
     fn test_parse_ubuntu_torrent() {
         let raw = std::fs::read("tests/fixtures/ubuntu.torrent").unwrap();
         let bencode = decode(&raw);
-        let torrent = parse(&raw, bencode);
+        let torrent = parse(&raw, bencode.unwrap());
 
         assert_eq!(torrent.announce, "https://torrent.ubuntu.com/announce");
         assert_eq!(torrent.name, "ubuntu-22.04.5-desktop-amd64.iso");

@@ -5,7 +5,7 @@ use ferrite_core::tracker::http::announce;
 fn main() {
     let raw = std::fs::read("tests/fixtures/ubuntu.torrent").unwrap();
     let bencode = decode(&raw);
-    let torrent = parse(&raw, bencode);
+    let torrent = parse(&raw, bencode.unwrap());
 
     println!("Parsed torrent: {}", torrent.name);
     println!("Announcing to: {}", torrent.announce);
