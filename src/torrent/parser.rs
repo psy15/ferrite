@@ -1,28 +1,39 @@
-use crate::bencode::decoder::BencodeValue;
 use crate::torrent::types::TorrentFile;
+use crate::{FeriteError, bencode::decoder::BencodeValue};
 use sha1::{Digest, Sha1};
 
-fn extract_string(value: &BencodeValue) -> String {
+fn extract_string(value: &BencodeValue) -> crate::Result<String> {
     match value {
-        BencodeValue::Bytes(b) => String::from_utf8(b.clone()).unwrap(),
-        _ => panic!("expected string"),
+        BencodeValue::Bytes(b) => {
+            Ok(String::from_utf8(b.clone())
+                .map_err(|e| FeriteError::TorrentParse(e.to_string()))?)
+        }
+        _ => Err(FeriteError::TorrentParse(
+            "expected string, got different type".to_string(),
+        )),
     }
 }
 
-fn extract_u64(value: &BencodeValue) -> u64 {
+fn extract_u64(value: &BencodeValue) -> crate::Result<u64> {
     match value {
-        BencodeValue::Integer(n) => *n as u64,
-        _ => panic!("expected integer"),
+        BencodeValue::Integer(n) => Ok(*n as u64),
+        _ => Err(FeriteError::TorrentParse(
+            "expected integer, got different type".to_string(),
+        )),
     }
 }
 
 /// Parses a torrent file from raw bytes and decoded bencode.
 /// The raw bytes are needed to compute info_hash via SHA1
 /// on the exact bytes of the info dict.
-pub fn parse(raw: &[u8], bencode: BencodeValue) -> TorrentFile {
+pub fn parse(raw: &[u8], bencode: BencodeValue) -> crate::Result<TorrentFile> {
     let pairs = match bencode {
         BencodeValue::Dict(pairs) => pairs,
-        _ => panic!("expected dict"),
+        _ => {
+            return Err(FeriteError::TorrentParse(
+                "expected integer, got different type".to_string(),
+            ));
+        }
     };
 
     let mut announce = None;
@@ -129,21 +140,27 @@ pub fn parse(raw: &[u8], bencode: BencodeValue) -> TorrentFile {
         }
     }
 
-    TorrentFile {
-        announce: extract_string(announce.unwrap()),
+    Ok(TorrentFile {
+        announce: extract_string(
+            announce.ok_or(FeriteError::TorrentParse("missing announce".to_string()))?,
+        )?,
         announce_list,
-        name: extract_string(name.unwrap()),
-        length: extract_u64(length.unwrap()),
-        piece_length: extract_u64(piece_length.unwrap()),
-        pieces: match pieces.unwrap() {
+        name: extract_string(name.ok_or(FeriteError::TorrentParse("missing name".to_string()))?)?,
+        length: extract_u64(
+            length.ok_or(FeriteError::TorrentParse("missing length".to_string()))?,
+        )?,
+        piece_length: extract_u64(piece_length.ok_or(FeriteError::TorrentParse(
+            "missing piece length".to_string(),
+        ))?)?,
+        pieces: match pieces.ok_or(FeriteError::TorrentParse("missing pieces".to_string()))? {
             BencodeValue::Bytes(b) => b
                 .chunks(20)
-                .map(|chunk| chunk.try_into().unwrap())
+                .map(|chunk| chunk.try_into().expect("piece must be 20 bytes"))
                 .collect(),
-            _ => panic!("pieces is not bytes"),
+            _ => return Err(FeriteError::TorrentParse("pieces is not bytes".to_string())),
         },
-        info_hash: info_hash.unwrap(),
-    }
+        info_hash: info_hash.ok_or(FeriteError::TorrentParse("missing info_hash".to_string()))?,
+    })
 }
 
 #[cfg(test)]
@@ -154,8 +171,8 @@ mod tests {
     #[test]
     fn test_parse_ubuntu_torrent() {
         let raw = std::fs::read("tests/fixtures/ubuntu.torrent").unwrap();
-        let bencode = decode(&raw);
-        let torrent = parse(&raw, bencode);
+        let bencode = decode(&raw).unwrap();
+        let torrent = parse(&raw, bencode).unwrap();
 
         assert_eq!(torrent.announce, "https://torrent.ubuntu.com/announce");
         assert_eq!(torrent.name, "ubuntu-22.04.5-desktop-amd64.iso");

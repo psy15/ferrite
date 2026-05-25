@@ -1,4 +1,5 @@
 use crate::{
+    FeriteError,
     bencode::decoder::{BencodeValue, decode},
     torrent::types::TorrentFile,
 };
@@ -13,8 +14,8 @@ fn url_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("%{:02x}", b)).collect()
 }
 
-fn parse_peers(response: &[u8]) -> Vec<Peer> {
-    let decoded = decode(response);
+fn parse_peers(response: &[u8]) -> crate::Result<Vec<Peer>> {
+    let decoded = decode(response)?;
     let mut peers = vec![];
 
     if let BencodeValue::Dict(pairs) = decoded {
@@ -61,11 +62,11 @@ fn parse_peers(response: &[u8]) -> Vec<Peer> {
             }
         }
     }
-    peers
+    Ok(peers)
 }
 
 /// Announces to the tracker and returns a list of peers.
-pub fn announce(torrent: &TorrentFile) -> Vec<Peer> {
+pub fn announce(torrent: &TorrentFile) -> crate::Result<Vec<Peer>> {
     let info_hash = torrent.info_hash;
     // TODO: generate random peer_id at startup
     let peer_id: [u8; 20] = *b"-FE0001-XXXXXXXXXXXX";
@@ -90,7 +91,10 @@ pub fn announce(torrent: &TorrentFile) -> Vec<Peer> {
         event
     );
 
-    let response = reqwest::blocking::get(&url).unwrap().bytes().unwrap();
+    let response = reqwest::blocking::get(&url)
+        .map_err(|e| FeriteError::Tracker(e.to_string()))?
+        .bytes()
+        .map_err(|e| FeriteError::Tracker(e.to_string()))?;
     parse_peers(&response)
 }
 
@@ -101,7 +105,7 @@ mod tests {
     #[test]
     fn test_parse_peers_dict_format() {
         let response = b"d5:peersld2:ip9:127.0.0.14:porti6881eeee";
-        let peers = parse_peers(response);
+        let peers = parse_peers(response).unwrap();
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].ip, "127.0.0.1");
         assert_eq!(peers[0].port, 6881);
@@ -112,7 +116,7 @@ mod tests {
         // 127.0.0.1:6881 in compact format
         // 127=0x7f, 0=0x00, 0=0x00, 1=0x01, 6881=0x1AE1
         let response = b"d5:peers6:\x7f\x00\x00\x01\x1a\xe1e";
-        let peers = parse_peers(response);
+        let peers = parse_peers(response).unwrap();
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].ip, "127.0.0.1");
         assert_eq!(peers[0].port, 6881);
