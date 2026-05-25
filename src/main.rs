@@ -10,7 +10,7 @@ fn main() {
     println!("Parsed torrent: {}", torrent.name);
     println!("Announcing to: {}", torrent.announce);
 
-    let peers = announce(&torrent);
+    let peers = announce(&torrent).unwrap();
     println!("Got {} peers", peers.len());
     for peer in peers.iter().take(5) {
         println!("  {}:{}", peer.ip, peer.port);
