@@ -8,8 +8,9 @@ name = "ferrite_core"
 path = "src/lib.rs"
 
 [dependencies]
-thiserror = "1"
+thiserror = "2"
 sha1 = "0.10"
-reqwest = { version = "0.11", features = ["blocking"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.13", features = ["blocking"] }
 
 [dev-dependencies]
