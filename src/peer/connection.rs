@@ -1,4 +1,5 @@
 use super::handshake::Handshake;
+use super::message::Message;
 use crate::{FeriteError, Result};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -39,5 +40,36 @@ impl PeerConnection {
             stream,
             peer_id: peer_handshake.peer_id,
         })
+    }
+
+    pub async fn send_message(&mut self, msg: Message) -> Result<()> {
+        let payload = msg.to_bytes();
+        let length = payload.len() as u32;
+        self.stream
+            .write_all(&length.to_be_bytes())
+            .await
+            .map_err(|e| FeriteError::Peer(e.to_string()))?;
+        self.stream
+            .write_all(&payload)
+            .await
+            .map_err(|e| FeriteError::Peer(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn read_message(&mut self) -> Result<Message> {
+        let mut len_buf = [0u8; 4];
+        self.stream
+            .read_exact(&mut len_buf)
+            .await
+            .map_err(|e| FeriteError::Peer(e.to_string()))?;
+        let length = u32::from_be_bytes(len_buf);
+
+        let mut payload = vec![0u8; length as usize];
+        self.stream
+            .read_exact(&mut payload)
+            .await
+            .map_err(|e| FeriteError::Peer(e.to_string()))?;
+
+        Message::from_bytes(&payload)
     }
 }
