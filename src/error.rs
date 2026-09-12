@@ -13,6 +13,9 @@ pub enum FeriteError {
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("peer error: {0}")]
+    Peer(String),
 }
 
 pub type Result<T> = std::result::Result<T, FeriteError>;
