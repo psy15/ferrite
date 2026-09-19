@@ -139,3 +139,120 @@ impl Message {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_choke() {
+        let bytes = vec![0];
+        assert!(matches!(
+            Message::from_bytes(&bytes).unwrap(),
+            Message::Choke
+        ));
+    }
+
+    #[test]
+    fn test_unchoke() {
+        let bytes = vec![1];
+        assert!(matches!(
+            Message::from_bytes(&bytes).unwrap(),
+            Message::Unchoke
+        ));
+    }
+
+    #[test]
+    fn test_interested() {
+        let bytes = vec![2];
+        assert!(matches!(
+            Message::from_bytes(&bytes).unwrap(),
+            Message::Interested
+        ));
+    }
+
+    #[test]
+    fn test_have() {
+        let mut bytes = vec![4];
+        bytes.extend_from_slice(&42u32.to_be_bytes());
+        assert!(matches!(
+            Message::from_bytes(&bytes).unwrap(),
+            Message::Have(42)
+        ));
+    }
+
+    #[test]
+    fn test_bitfield() {
+        let bytes = vec![5, 0xFF, 0xAB, 0x12];
+        match Message::from_bytes(&bytes).unwrap() {
+            Message::Bitfield(b) => assert_eq!(b, vec![0xFF, 0xAB, 0x12]),
+            _ => panic!("wrong type"),
+        }
+    }
+
+    #[test]
+    fn test_request() {
+        let mut bytes = vec![6];
+        bytes.extend_from_slice(&1u32.to_be_bytes()); // index
+        bytes.extend_from_slice(&0u32.to_be_bytes()); // begin
+        bytes.extend_from_slice(&16384u32.to_be_bytes()); // length
+        match Message::from_bytes(&bytes).unwrap() {
+            Message::Request {
+                index,
+                begin,
+                length,
+            } => {
+                assert_eq!(index, 1);
+                assert_eq!(begin, 0);
+                assert_eq!(length, 16384);
+            }
+            _ => panic!("wrong type"),
+        }
+    }
+
+    #[test]
+    fn test_piece() {
+        let mut bytes = vec![7];
+        bytes.extend_from_slice(&0u32.to_be_bytes()); // index
+        bytes.extend_from_slice(&0u32.to_be_bytes()); // begin
+        bytes.extend_from_slice(&[1, 2, 3, 4]); // data
+        match Message::from_bytes(&bytes).unwrap() {
+            Message::Piece { index, begin, data } => {
+                assert_eq!(index, 0);
+                assert_eq!(begin, 0);
+                assert_eq!(data, vec![1, 2, 3, 4]);
+            }
+            _ => panic!("wrong type"),
+        }
+    }
+
+    #[test]
+    fn test_empty_message_errors() {
+        let result = Message::from_bytes(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_unknown_message_id_errors() {
+        let result = Message::from_bytes(&[99]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_to_bytes_interested() {
+        let bytes = Message::Interested.to_bytes();
+        assert_eq!(bytes, vec![2]);
+    }
+
+    #[test]
+    fn test_to_bytes_request() {
+        let bytes = Message::Request {
+            index: 0,
+            begin: 0,
+            length: 16384,
+        }
+        .to_bytes();
+        assert_eq!(bytes[0], 6);
+        assert_eq!(bytes.len(), 13);
+    }
+}

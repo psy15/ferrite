@@ -78,9 +78,8 @@ pub fn announce(torrent: &TorrentFile) -> crate::Result<Vec<Peer>> {
     let downloaded = 0;
     let left = torrent.length;
     let event = "started";
-
     let url = format!(
-        "{}?info_hash={}&peer_id={}&port={}&uploaded={}&downloaded={}&left={}&event={}",
+        "{}?info_hash={}&peer_id={}&port={}&uploaded={}&downloaded={}&left={}&event={}&numwant=200",
         torrent.announce,
         url_encode(&info_hash),
         url_encode(&peer_id),
