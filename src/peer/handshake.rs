@@ -42,3 +42,53 @@ impl Handshake {
         Ok(Self { info_hash, peer_id })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_handshake_to_bytes_length() {
+        let info_hash = [1u8; 20];
+        let peer_id = [2u8; 20];
+        let h = Handshake::new(info_hash, peer_id);
+        assert_eq!(h.to_bytes().len(), 68);
+    }
+
+    #[test]
+    fn test_handshake_roundtrip() {
+        let info_hash = [1u8; 20];
+        let peer_id = [2u8; 20];
+        let h = Handshake::new(info_hash, peer_id);
+        let bytes = h.to_bytes();
+        let parsed = Handshake::from_bytes(&bytes).unwrap();
+        assert_eq!(parsed.info_hash, info_hash);
+        assert_eq!(parsed.peer_id, peer_id);
+    }
+
+    #[test]
+    fn test_handshake_wrong_protocol() {
+        let mut bytes = [0u8; 68];
+        bytes[0] = 19;
+        // wrong protocol string, all zeros
+        let result = Handshake::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_handshake_too_short() {
+        let bytes = [0u8; 10];
+        let result = Handshake::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_handshake_starts_with_protocol_length() {
+        let info_hash = [0u8; 20];
+        let peer_id = [0u8; 20];
+        let h = Handshake::new(info_hash, peer_id);
+        let bytes = h.to_bytes();
+        assert_eq!(bytes[0], 19);
+        assert_eq!(&bytes[1..20], b"BitTorrent protocol");
+    }
+}
