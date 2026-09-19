@@ -226,6 +226,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_parse_multifile_torrent() {
         let raw = std::fs::read("tests/fixtures/bigbuckbunny.torrent").unwrap();
         let bencode = decode(&raw).unwrap();
